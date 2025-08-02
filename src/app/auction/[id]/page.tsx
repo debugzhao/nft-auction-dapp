@@ -8,6 +8,7 @@ import { getIPFSImageUrl } from '@/utils/ipfs';
 import BidForm from '@/components/BidForm';
 import CountdownTimer from '@/components/CountdownTimer';
 import WalletConnect from '@/components/WalletConnect';
+import AutoBiddingStrategies from '@/components/AutoBiddingStrategies';
 
 export default function AuctionDetail() {
   const params = useParams();
@@ -17,6 +18,13 @@ export default function AuctionDetail() {
 
   const handleBidSuccess = () => {
     setRefreshKey(prev => prev + 1);
+  };
+
+  const handleAutoBid = (amount: string, strategy: any) => {
+    console.log('自动出价:', { amount, strategy, auctionId });
+    // 这里实现自动出价逻辑
+    // 实际项目中会调用智能合约
+    handleBidSuccess();
   };
 
   if (loading) {
@@ -74,7 +82,7 @@ export default function AuctionDetail() {
                 alt={auction.nft.name || `NFT #${auction.tokenId}`}
                 className="w-full h-96 object-cover"
                 onError={(e) => {
-                  e.currentTarget.src = '/placeholder-nft.png';
+                  e.currentTarget.src = '/placeholder-nft.svg';
                 }}
               />
             </div>
@@ -158,7 +166,17 @@ export default function AuctionDetail() {
 
             {/* 出价表单 */}
             {!isEnded && (
-              <BidForm auction={auction} onBidSuccess={handleBidSuccess} />
+              <>
+                <BidForm auction={auction} onBidSuccess={handleBidSuccess} />
+                
+                {/* 自动出价策略 */}
+                <AutoBiddingStrategies
+                  auctionId={auction.id}
+                  currentPrice={auction.currentPrice}
+                  endTime={auction.endTime}
+                  onAutoBid={handleAutoBid}
+                />
+              </>
             )}
 
             {/* 拍卖结束状态 */}

@@ -5,10 +5,19 @@ import Link from 'next/link';
 import { useAllAuctions } from '@/hooks/useAuction';
 import { Auction } from '@/types';
 import { getIPFSImageUrl } from '@/utils/ipfs';
+import { PriceChangeAnimation, HighFrequencyIndicator, BiddingHeatMap, PriceTrendArrow } from './RealTimePriceUpdater';
 
-export default function AuctionList() {
-  const { auctions, loading } = useAllAuctions();
+interface AuctionListProps {
+  auctions?: Auction[];
+  priceUpdates?: { [key: string]: string };
+}
+
+export default function AuctionList({ auctions: propAuctions, priceUpdates = {} }: AuctionListProps) {
+  const { auctions: hookAuctions, loading } = useAllAuctions();
   const [filteredAuctions, setFilteredAuctions] = useState<Auction[]>([]);
+  
+  // 使用传入的auctions或hook的auctions
+  const auctions = propAuctions || hookAuctions;
 
   useEffect(() => {
     if (auctions.length > 0) {
@@ -36,34 +45,70 @@ export default function AuctionList() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {filteredAuctions.map((auction) => (
-        <AuctionCard key={auction.id} auction={auction} />
+        <AuctionCard 
+          key={auction.id} 
+          auction={auction} 
+          priceUpdate={priceUpdates[auction.id]}
+        />
       ))}
     </div>
   );
 }
 
-function AuctionCard({ auction }: { auction: Auction }) {
-  const imageUrl = auction.nft.image ? getIPFSImageUrl(auction.nft.image) : '/placeholder-nft.png';
+function AuctionCard({ auction, priceUpdate }: { auction: Auction; priceUpdate?: string }) {
+  const imageUrl = auction.nft.image ? getIPFSImageUrl(auction.nft.image) : '/placeholder-nft.svg';
   const timeLeft = auction.endTime - Date.now() / 1000;
   const isEndingSoon = timeLeft < 3600; // 1小时内结束
+  
+  // 计算最近1分钟的出价次数
+  const recentBids = auction.bids.filter(bid => 
+    Date.now() - bid.timestamp < 60000
+  ).length;
+  
+  // 计算热度值
+  const heat = auction.heat || (auction.bids.length * 10 + recentBids * 5);
+  
+  // 价格历史（模拟）
+  const priceHistory = auction.bids
+    .slice(-5)
+    .map(bid => ({ price: parseFloat(bid.amount), timestamp: bid.timestamp }));
 
   return (
     <Link href={`/auction/${auction.id}`}>
-      <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 overflow-hidden">
+      <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-all duration-200 overflow-hidden relative group">
         <div className="relative">
           <img
             src={imageUrl}
             alt={auction.nft.name}
-            className="w-full h-48 object-cover"
+            className="w-full h-48 object-cover transition-transform duration-200 group-hover:scale-105"
             onError={(e) => {
-              e.currentTarget.src = '/placeholder-nft.png';
+              e.currentTarget.src = '/placeholder-nft.svg';
             }}
           />
-          {isEndingSoon && (
-            <div className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded text-sm font-medium">
-              即将结束
-            </div>
+          
+          {/* 价格变化动画 */}
+          {priceUpdate && (
+            <PriceChangeAnimation 
+              oldPrice={auction.currentPrice} 
+              newPrice={priceUpdate} 
+              show={true} 
+            />
           )}
+          
+          {/* 状态标签 */}
+          <div className="absolute top-2 left-2 space-y-1">
+            {isEndingSoon && (
+              <div className="bg-red-500 text-white px-2 py-1 rounded text-xs font-medium animate-pulse">
+                ⏰ 即将结束
+              </div>
+            )}
+            <HighFrequencyIndicator bidCount={recentBids} />
+          </div>
+          
+          {/* 热度指示器 */}
+          <div className="absolute top-2 right-2">
+            <BiddingHeatMap heat={heat} />
+          </div>
         </div>
         
         <div className="p-4">
@@ -72,11 +117,14 @@ function AuctionCard({ auction }: { auction: Auction }) {
           </h3>
           
           <div className="space-y-2">
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span className="text-gray-600">当前价格</span>
-              <span className="font-semibold text-green-600">
-                {parseFloat(auction.currentPrice).toFixed(4)} ETH
-              </span>
+              <div className="flex items-center">
+                <span className={`font-semibold ${priceUpdate ? 'text-green-600 animate-pulse' : 'text-green-600'}`}>
+                  {parseFloat(auction.currentPrice).toFixed(4)} ETH
+                </span>
+                <PriceTrendArrow priceHistory={priceHistory} />
+              </div>
             </div>
             
             <div className="flex justify-between">

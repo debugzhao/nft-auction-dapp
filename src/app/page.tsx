@@ -1,8 +1,68 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import WalletConnect from '@/components/WalletConnect';
 import AuctionList from '@/components/AuctionList';
+import BatchBidForm from '@/components/BatchBidForm';
+import RealTimePriceUpdater from '@/components/RealTimePriceUpdater';
+import { getAllMockAuctions } from '@/utils/mockData';
+import { Auction } from '@/types';
 import Link from 'next/link';
 
 export default function Home() {
+  const [showBatchBid, setShowBatchBid] = useState(false);
+  const [auctions, setAuctions] = useState<Auction[]>([]);
+  const [priceUpdates, setPriceUpdates] = useState<{ [key: string]: string }>({});
+
+  useEffect(() => {
+    setAuctions(getAllMockAuctions());
+  }, []);
+
+  const handleBatchBid = (bids: any[]) => {
+    console.log('批量出价:', bids);
+    // 这里实现批量出价逻辑
+    alert(`成功对 ${bids.length} 个拍卖进行批量出价！`);
+    setShowBatchBid(false);
+  };
+
+  const handlePriceUpdate = (update: { auctionId: string; newPrice: string; bidder: string; timestamp: number }) => {
+    // 更新拍卖价格
+    setAuctions(prev => prev.map(auction => 
+      auction.id === update.auctionId 
+        ? { 
+            ...auction, 
+            currentPrice: update.newPrice,
+            highestBidder: update.bidder,
+            bids: [
+              {
+                id: `${auction.id}-bid-${Date.now()}`,
+                auctionId: auction.id,
+                bidder: update.bidder,
+                amount: update.newPrice,
+                timestamp: update.timestamp,
+                strategy: 'manual' as any,
+                isWinning: true,
+                rarityBonus: Math.random() * 10,
+                txHash: `0x${Math.random().toString(16).substr(2, 64)}`,
+                blockNumber: 1000000 + Math.floor(Math.random() * 1000),
+              },
+              ...auction.bids.map(bid => ({ ...bid, isWinning: false }))
+            ]
+          }
+        : auction
+    ));
+
+    // 触发价格变化动画
+    setPriceUpdates(prev => ({ ...prev, [update.auctionId]: update.newPrice }));
+    setTimeout(() => {
+      setPriceUpdates(prev => {
+        const newUpdates = { ...prev };
+        delete newUpdates[update.auctionId];
+        return newUpdates;
+      });
+    }, 3000);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 导航栏 */}
@@ -19,6 +79,24 @@ export default function Home() {
             </div>
             
             <div className="flex items-center space-x-4">
+              <Link 
+                href="/rarity" 
+                className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-md hover:from-purple-700 hover:to-pink-700 transition-colors"
+              >
+                🔮 稀有度
+              </Link>
+              <Link 
+                href="/my-bids" 
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+              >
+                我的出价
+              </Link>
+              <Link 
+                href="/dashboard" 
+                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+              >
+                数据看板
+              </Link>
               <Link 
                 href="/create" 
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
@@ -60,7 +138,7 @@ export default function Home() {
               价格和状态实时同步，毫秒级响应
             </p>
           </div>
-          
+
           <div className="bg-white p-6 rounded-lg shadow-md">
             <div className="text-2xl mb-2">💰</div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Gas 优化</h3>
@@ -74,13 +152,34 @@ export default function Home() {
         <div className="bg-white rounded-lg shadow-md p-6">
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-xl font-semibold text-gray-900">进行中的拍卖</h3>
-            <div className="text-sm text-gray-500">
-              实时更新 • 高并发支持
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => setShowBatchBid(true)}
+                className="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-md hover:from-purple-700 hover:to-blue-700 transition-all shadow-md"
+              >
+                🚀 批量出价
+              </button>
+              <RealTimePriceUpdater
+                auctions={auctions}
+                onPriceUpdate={handlePriceUpdate}
+                enabled={true}
+              />
+              <div className="text-sm text-gray-500">
+                高并发支持 • Monad 网络
+              </div>
             </div>
           </div>
           
-          <AuctionList />
+          <AuctionList auctions={auctions} priceUpdates={priceUpdates} />
         </div>
+
+        {/* 批量出价弹窗 */}
+        {showBatchBid && (
+          <BatchBidForm
+            onClose={() => setShowBatchBid(false)}
+            onBatchBid={handleBatchBid}
+          />
+        )}
 
         {/* 快速开始指南 */}
         <div className="mt-8 bg-blue-50 rounded-lg p-6">
